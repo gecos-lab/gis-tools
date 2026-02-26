@@ -127,7 +127,13 @@ class PolygonRuleLegendToPointRuleLegend(QgsProcessingAlgorithm):
         new_rule.setFilterExpression(src_rule.filterExpression())
         new_rule.setDescription(src_rule.description())
         new_rule.setActive(src_rule.active())
-        new_rule.setElse(src_rule.isElse())
+
+        # QGIS API: setElse() vs setIsElse() (varies by version/build)
+        try:
+            new_rule.setIsElse(src_rule.isElse())
+        except AttributeError:
+            new_rule.setElse(src_rule.isElse())
+
         try:
             new_rule.setCheckState(src_rule.checkState())
         except Exception:
