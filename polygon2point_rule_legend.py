@@ -177,7 +177,10 @@ class PolygonRuleLegendToPointRuleLegend(QgsProcessingAlgorithm):
         if src_root is None:
             raise QgsProcessingException("Rule-based renderer has no root rule.")
 
-        new_root = self._convert_rule_tree(src_root, size_pt, outline_color, outline_width)
+        # IMPORTANT: root is a container; copy ALL children rules into a fresh root
+        new_root = QgsRuleBasedRenderer.Rule(None)
+        for child in src_root.children():
+            new_root.appendChild(self._convert_rule_tree(child, size_pt, outline_color, outline_width))
 
         # Build and apply new renderer
         new_renderer = QgsRuleBasedRenderer(new_root)
