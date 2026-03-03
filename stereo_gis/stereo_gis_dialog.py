@@ -420,20 +420,18 @@ class StereoGisDialog(QDialog):
             QMessageBox.critical(self, "Stereo GIS", "No vector layer selected.")
             return
 
-        if not layer.selectedFeatureIds():
-            QMessageBox.warning(self, "Stereo GIS", "No selected features. Select rows/features first, then run.")
-            return
-
         is_planes = (self.data_combo.currentIndex() == 0)
         field1 = self.field1_combo.currentText()
         field2 = self.field2_combo.currentText()
 
         try:
             data = read_orientations_from_layer_selection(layer, is_planes, field1, field2)
+
             vectors_xyz = data["vectors_xyz"]
-            n = vectors_xyz.shape[0]
+            n = int(vectors_xyz.shape[0])
             if n == 0:
-                QMessageBox.warning(self, "Stereo GIS", "No valid orientation values in the selected features.")
+                QMessageBox.warning(self, "Stereo GIS", "No valid orientation values in the layer/selection.")
+                self._plot_empty()
                 return
 
             trends = data["trends_deg"]
@@ -458,12 +456,18 @@ class StereoGisDialog(QDialog):
                 else:
                     self.ax.line(plunges, trends, "k.", markersize=4, alpha=0.85)
 
-            if show_individual and plot_gcs:
+            if show_individual and plot_gcs and data.get("strikes_deg") is not None and data.get("dips_deg") is not None:
                 self.ax.plane(data["strikes_deg"], data["dips_deg"], color="0.4", linewidth=0.7, alpha=0.6)
 
             if show_contours:
                 try:
-                    self.ax.density_contourf(plunges, trends, measurement="lines", cmap="Greys", alpha=0.6, levels=int(self.contour_levels.value()))
+                    self.ax.density_contourf(
+                        plunges, trends,
+                        measurement="lines",
+                        cmap="Greys",
+                        alpha=0.6,
+                        levels=int(self.contour_levels.value())
+                    )
                 except TypeError:
                     self.ax.density_contourf(plunges, trends, cmap="Greys", alpha=0.6)
 
@@ -491,12 +495,15 @@ class StereoGisDialog(QDialog):
             if self.chk_kmedoids.isChecked():
                 k = int(self.k_spin.value())
                 if k > n:
-                    QMessageBox.warning(self, "Stereo GIS", f"k={k} cannot exceed number of valid selected observations n={n}.")
+                    QMessageBox.warning(self, "Stereo GIS", f"k={k} cannot exceed number of observations n={n}.")
                     return
 
                 if self.init_pick.isChecked():
                     if len(self._picked_medoid_indices) != k:
-                        QMessageBox.warning(self, "Stereo GIS", f"Pick exactly k={k} medoids on plot (picked {len(self._picked_medoid_indices)}).")
+                        QMessageBox.warning(
+                            self, "Stereo GIS",
+                            f"Pick exactly k={k} medoids on plot (picked {len(self._picked_medoid_indices)})."
+                        )
                         return
                     init_medoids = np.array(self._picked_medoid_indices, dtype=int)
                 else:
@@ -510,12 +517,14 @@ class StereoGisDialog(QDialog):
                     for ci in range(k):
                         idx = np.where(labels == ci)[0]
                         color = cmap(ci % 10)
+
                         if plot_poles:
                             if is_planes:
                                 self.ax.pole(trends[idx], plunges[idx], ".", color=color, markersize=6, alpha=0.9)
                             else:
                                 self.ax.line(plunges[idx], trends[idx], ".", color=color, markersize=6, alpha=0.9)
-                        if is_planes and plot_gcs:
+
+                        if is_planes and plot_gcs and data.get("strikes_deg") is not None and data.get("dips_deg") is not None:
                             self.ax.plane(data["strikes_deg"][idx], data["dips_deg"][idx], color=color, linewidth=1.0, alpha=0.45)
 
                     for ci, mi in enumerate(medoids):
@@ -530,13 +539,14 @@ class StereoGisDialog(QDialog):
                     if idx.size == 0:
                         continue
                     vmf_c = vmf_mean_axial(vectors_xyz[idx])
-                    m_tr, m_pl = xyz_to_trend_plunge(vmf_c["mean_xyz"]) if np.isfinite(vmf_c["mean_xyz"]).all() else (float("nan"), float("nan"))
+                    mean_xyz = vmf_c["mean_xyz"]
+                    m_tr, m_pl = xyz_to_trend_plunge(mean_xyz) if np.isfinite(mean_xyz).all() else (float("nan"), float("nan"))
                     cluster_summary.append((ci, int(idx.size), int(medoids[ci]), f"{m_tr:.2f}", f"{m_pl:.2f}", f"{vmf_c['Rbar']:.3f}", f"{vmf_c['kappa']:.3g}"))
 
-            self.ax.set_title(f"{'Planes' if is_planes else 'Lines'} (selected n={n})")
+            self.ax.set_title(f"{'Planes' if is_planes else 'Lines'} (n={n})")
             self.canvas.draw()
 
-            # cache projected XY for picking
+            # cache projected XY for picking (optional)
             try:
                 from mplstereonet import stereonet_math
                 x, y = stereonet_math.line(plunges, trends)

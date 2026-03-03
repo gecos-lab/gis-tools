@@ -149,18 +149,18 @@ def kmedoids_pam_axial(
 
 def read_orientations_from_layer_selection(layer, is_planes: bool, field1: str, field2: str) -> dict:
     """
-    Reads selected features only.
-    Planes: field1=dip, field2=dipdir -> vectors are POLES.
-    Lines:  field1=plunge, field2=trend -> vectors are lines.
-    """
-    feats = layer.selectedFeatures()
-    if not feats:
-        return {"vectors_xyz": np.zeros((0, 3), dtype=float)}
+    Reads orientations from the layer.
+    Uses selected features if any are selected; otherwise uses all features.
 
+    Planes: field1=dip,    field2=dipdir -> vectors are POLES.
+    Lines:  field1=plunge, field2=trend  -> vectors are lines.
+    """
     idx1 = layer.fields().indexOf(field1)
     idx2 = layer.fields().indexOf(field2)
     if idx1 < 0 or idx2 < 0:
         raise QgsProcessingException("Selected field not found in layer.")
+
+    feats = layer.getSelectedFeatures() if layer.selectedFeatureCount() else layer.getFeatures()
 
     vectors = []
     strikes = []
@@ -185,6 +185,7 @@ def read_orientations_from_layer_selection(layer, is_planes: bool, field1: str, 
             dipdir = wrap360(v2)
             if not (0.0 <= dip <= 90.0):
                 continue
+
             pole = dipdir_dip_to_pole_xyz(dipdir, dip)
             vectors.append(pole)
 
@@ -199,16 +200,17 @@ def read_orientations_from_layer_selection(layer, is_planes: bool, field1: str, 
             trend = wrap360(v2)
             if not (0.0 <= plunge <= 90.0):
                 continue
+
             line = trend_plunge_to_xyz(trend, plunge)
             vectors.append(line)
             trends.append(trend)
             plunges.append(plunge)
 
-    vectors_xyz = np.array(vectors, dtype=float)
+    vectors_xyz = np.asarray(vectors, dtype=float)
     return {
         "vectors_xyz": vectors_xyz,
-        "strikes_deg": np.array(strikes, dtype=float) if strikes else None,
-        "dips_deg": np.array(dips, dtype=float) if dips else None,
-        "trends_deg": np.array(trends, dtype=float),
-        "plunges_deg": np.array(plunges, dtype=float),
+        "strikes_deg": np.asarray(strikes, dtype=float) if strikes else None,
+        "dips_deg": np.asarray(dips, dtype=float) if dips else None,
+        "trends_deg": np.asarray(trends, dtype=float),
+        "plunges_deg": np.asarray(plunges, dtype=float),
     }
