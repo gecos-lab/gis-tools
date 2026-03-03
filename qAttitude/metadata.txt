@@ -1,5 +1,5 @@
 [general]
-name=Stereo GIS
+name=qAttitude
 description=Interactive stereonet plotting and orientation analysis (VMF/Bingham/Kent optional), k-medoids (random or click init), tables with copy/paste, save-on-demand.
 version=0.1.0
 qgisMinimumVersion=3.28

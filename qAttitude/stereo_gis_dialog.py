@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-# stereo_gis @ Andrea Bistacchi 2024-06-26
+# qAttitude @ Andrea Bistacchi 2024-06-26
 
 import os
 import sys
 import traceback
 
-# Plugin-local libraries (optional): stereo_gis/lib
+# Plugin-local libraries (optional): qAttitude/lib
 LIB = os.path.join(os.path.dirname(__file__), "lib")
 if os.path.isdir(LIB) and LIB not in sys.path:
     sys.path.insert(0, LIB)
@@ -136,7 +136,7 @@ class StereoGisDialog(QDialog):
         self.analysis_layer = None
         self._layer_ids_by_index = []  # keeps combo index -> layer.id()
 
-        self.setWindowTitle("Stereo GIS")
+        self.setWindowTitle("qAttitude")
         self.resize(1100, 750)
 
         self._picked_medoid_indices = []
@@ -155,7 +155,7 @@ class StereoGisDialog(QDialog):
         main.addLayout(right, 1)
 
         # Inputs
-        g_in = LayerDropGroupBox("Input layer (selected only)", self)
+        g_in = LayerDropGroupBox("Input layer (all or selected features)", self)
         g_in.layerDropped.connect(self.set_analysis_layer)
         left.addWidget(g_in)
         grid = QGridLayout(g_in)
@@ -205,13 +205,13 @@ class StereoGisDialog(QDialog):
         gridp.addWidget(self.plane_mode_combo, 2, 1, 1, 2)
 
         # Means
-        g_means = QGroupBox("Means / models")
+        g_means = QGroupBox("Parametric distribution fitting")
         left.addWidget(g_means)
         gridm = QGridLayout(g_means)
 
-        self.chk_vmf = QCheckBox("Plot VMF axial mean (mirror upper hemisphere)")
+        self.chk_vmf = QCheckBox("Plot Von Mises-Fisher mean (red)")
         self.chk_vmf.setChecked(True)
-        self.chk_bingham = QCheckBox("Plot Bingham summary (β axis + girdle)")
+        self.chk_bingham = QCheckBox("Plot Bingham β axis & girdle (blue)")
         self.chk_bingham.setChecked(True)
 
         gridm.addWidget(self.chk_vmf, 0, 0, 1, 2)
@@ -232,8 +232,8 @@ class StereoGisDialog(QDialog):
         self.k_spin.setValue(2)
         gridk.addWidget(self.k_spin, 1, 1)
 
-        self.init_random = QRadioButton("Random init")
-        self.init_pick = QRadioButton("Pick medoids on plot")
+        self.init_random = QRadioButton("Random seeds")
+        self.init_pick = QRadioButton("Pick seeds on plot")
         self.init_random.setChecked(True)
         gridk.addWidget(self.init_random, 2, 0, 1, 2)
         gridk.addWidget(self.init_pick, 3, 0, 1, 2)
@@ -244,7 +244,7 @@ class StereoGisDialog(QDialog):
         self.seed_spin.setValue(0)
         gridk.addWidget(self.seed_spin, 4, 1)
 
-        self.btn_pick = QPushButton("Pick medoids")
+        self.btn_pick = QPushButton("Pick seeds")
         self.btn_clear_picks = QPushButton("Clear picks")
         self.lbl_picks = QLabel("Picked: 0")
         gridk.addWidget(self.btn_pick, 5, 0)
@@ -259,7 +259,7 @@ class StereoGisDialog(QDialog):
         gridk.addWidget(self.chk_plot_clusters, 7, 0, 1, 2)
 
         # Saving
-        g_save = QGroupBox("Saving (off by default)")
+        g_save = QGroupBox("Save to files (off by default)")
         left.addWidget(g_save)
         grids = QGridLayout(g_save)
 
@@ -273,10 +273,6 @@ class StereoGisDialog(QDialog):
         grids.addWidget(self.out_dir, 1, 1)
         grids.addWidget(self.btn_browse, 1, 2)
         self.btn_browse.clicked.connect(self._browse_dir)
-
-        self.chk_save_png = QCheckBox("Save plot PNG")
-        self.chk_save_png.setChecked(True)
-        grids.addWidget(self.chk_save_png, 2, 0, 1, 2)
 
         # Run
         self.btn_run = QPushButton("Run analysis")
@@ -301,7 +297,7 @@ class StereoGisDialog(QDialog):
         self.cluster_table.setSelectionBehavior(QAbstractItemView.SelectItems)
         right.addWidget(self.cluster_table, 1)
 
-        right.addWidget(QLabel("Hypothesis tests (placeholder)"))
+        right.addWidget(QLabel("Hypothesis tests summary (Ctrl+C copy)"))
         self.tests_table = CopyableTableView()
         self.tests_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tests_table.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -315,13 +311,13 @@ class StereoGisDialog(QDialog):
         self._layer_ids_by_index = []
         for layer in QgsProject.instance().mapLayers().values():
             # Optional: filter only vector layers, etc.
-            # if layer.type() != QgsMapLayer.VectorLayer:
-            #     continue
+            if layer.type() != QgsMapLayer.VectorLayer:
+                continue
 
             self.layer_combo.addItem(layer.name())
             self._layer_ids_by_index.append(layer.id())
 
-            # If we already have an analysis_layer, keep UI in sync
+        # If we already have an analysis_layer, keep UI in sync
         if self.analysis_layer is not None:
             self._select_layer_in_combo(self.analysis_layer)
 
@@ -390,12 +386,12 @@ class StereoGisDialog(QDialog):
     def _toggle_picking(self):
         if not self.init_pick.isChecked():
             QMessageBox.information(
-                self, "Pick medoids", "Select 'Pick medoids on plot' first."
+                self, "Pick medoid seeds", "Select 'Pick seeds on plot' first."
             )
             return
         self._picking_enabled = not self._picking_enabled
         self.btn_pick.setText(
-            "Picking: ON" if self._picking_enabled else "Pick medoids"
+            "Picking: ON" if self._picking_enabled else "Pick medoid seeds"
         )
 
     def _clear_picks(self):
@@ -410,8 +406,8 @@ class StereoGisDialog(QDialog):
         if self._last_projected is None:
             QMessageBox.information(
                 self,
-                "Pick medoids",
-                "Run analysis first (to compute point projection), then pick medoids.",
+                "Pick medoid seeds",
+                "Run analysis first (to compute point projection), then pick medoid seeds.",
             )
             return
 
@@ -430,7 +426,7 @@ class StereoGisDialog(QDialog):
         self.lbl_picks.setText(f"Picked: {len(self._picked_medoid_indices)} / {k}")
         if len(self._picked_medoid_indices) == k:
             self._picking_enabled = False
-            self.btn_pick.setText("Pick medoids")
+            self.btn_pick.setText("Pick medoid seeds")
 
     def _set_table(self, table_view, headers, rows):
         model = QStandardItemModel()
@@ -445,7 +441,7 @@ class StereoGisDialog(QDialog):
     def _run_analysis(self):
         layer = self._current_layer()
         if layer is None:
-            QMessageBox.critical(self, "Stereo GIS", "No vector layer selected.")
+            QMessageBox.critical(self, "qAttitude", "No vector layer selected.")
             return
 
         is_planes = self.data_combo.currentIndex() == 0
@@ -462,7 +458,7 @@ class StereoGisDialog(QDialog):
             if n == 0:
                 QMessageBox.warning(
                     self,
-                    "Stereo GIS",
+                    "qAttitude",
                     "No valid orientation values in the layer/selection.",
                 )
                 self._plot_empty()
@@ -485,10 +481,11 @@ class StereoGisDialog(QDialog):
 
             # base plot
             if show_individual and plot_poles:
-                if is_planes:
-                    self.ax.pole(trends, plunges, "k.", markersize=4, alpha=0.85)
-                else:
-                    self.ax.line(plunges, trends, "k.", markersize=4, alpha=0.85)
+                # if is_planes:
+                #     self.ax.pole(trends, plunges, "k.", markersize=4, alpha=0.85)
+                # else:
+                #     self.ax.line(plunges, trends, "k.", markersize=4, alpha=0.85)
+                self.ax.line(plunges, trends, "k.", markersize=4, alpha=0.85)
 
             if (
                 show_individual
@@ -500,38 +497,46 @@ class StereoGisDialog(QDialog):
                     data["strikes_deg"],
                     data["dips_deg"],
                     color="0.4",
-                    linewidth=0.7,
-                    alpha=0.6,
+                    linewidth=1,
+                    alpha=1,
                 )
 
             if show_contours:
-                try:
-                    self.ax.density_contourf(
-                        plunges,
-                        trends,
-                        measurement="lines",
-                        cmap="Greys",
-                        alpha=0.6,
-                        levels=int(self.contour_levels.value()),
-                    )
-                except TypeError:
-                    self.ax.density_contourf(plunges, trends, cmap="Greys", alpha=0.6)
+                # try:
+                #     self.ax.density_contourf(
+                #         plunges,
+                #         trends,
+                #         measurement="lines",
+                #         cmap="Greys",
+                #         alpha=0.6,
+                #         levels=int(self.contour_levels.value()),
+                #     )
+                # except TypeError:
+                #     self.ax.density_contourf(plunges, trends, cmap="Greys", alpha=0.6)
+                self.ax.density_contourf(
+                    plunges,
+                    trends,
+                    measurement="lines",
+                    cmap="Greys",
+                    alpha=0.6,
+                    levels=int(self.contour_levels.value()),
+                )
 
             # overlays
             if self.chk_vmf.isChecked():
-                vmf = vmf_mean_axial(vectors_xyz)
+                vmf = vmf_mean_axial(vectors_xyz) #_______________________________________________
                 m = vmf["mean_xyz"]
                 if np.isfinite(m).all():
                     tr, pl = xyz_to_trend_plunge(m)
                     self.ax.line(pl, tr, "r*", markersize=12)
 
             if self.chk_bingham.isChecked():
-                b = bingham_principal_axes_axial(vectors_xyz)
+                b = bingham_principal_axes_axial(vectors_xyz) #_______________________________________________
                 beta = b["beta_axis_xyz"]
                 tr, pl = xyz_to_trend_plunge(beta)
                 self.ax.line(pl, tr, "D", color="#1f77b4", markersize=7)
 
-                dipdir = tr
+                dipdir = wrap360(tr + 180)
                 dip = 90.0 - pl
                 strike = dipdir2strike(dipdir)
                 self.ax.plane(strike, dip, color="#1f77b4", linewidth=1.4, alpha=0.85)
@@ -543,7 +548,7 @@ class StereoGisDialog(QDialog):
                 if k > n:
                     QMessageBox.warning(
                         self,
-                        "Stereo GIS",
+                        "qAttitude",
                         f"k={k} cannot exceed number of observations n={n}.",
                     )
                     return
@@ -552,7 +557,7 @@ class StereoGisDialog(QDialog):
                     if len(self._picked_medoid_indices) != k:
                         QMessageBox.warning(
                             self,
-                            "Stereo GIS",
+                            "qAttitude",
                             f"Pick exactly k={k} medoids on plot (picked {len(self._picked_medoid_indices)}).",
                         )
                         return
@@ -689,19 +694,18 @@ class StereoGisDialog(QDialog):
                 if not out_dir or not os.path.isdir(out_dir):
                     QMessageBox.warning(
                         self,
-                        "Stereo GIS",
+                        "qAttitude",
                         "Save enabled, but output directory is invalid.",
                     )
                     return
-                if self.chk_save_png.isChecked():
-                    self.fig.savefig(
-                        os.path.join(out_dir, "stereonet.png"),
-                        dpi=200,
-                        bbox_inches="tight",
-                    )
+                self.fig.savefig(
+                    os.path.join(out_dir, "stereonet.png"),
+                    dpi=200,
+                    bbox_inches="tight",
+                )
 
         except Exception as e:
             tb = traceback.format_exc()
             QMessageBox.critical(
-                self, "Stereo GIS", f"Error: {type(e).__name__}: {e}\n\n{tb}"
+                self, "qAttitude", f"Error: {type(e).__name__}: {e}\n\n{tb}"
             )

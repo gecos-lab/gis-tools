@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# stereo_gis @ Andrea Bistacchi 2024-06-26
+# qAttitude @ Andrea Bistacchi 2024-06-26
 
 import math
 import numpy as np
@@ -8,7 +8,7 @@ from qgis.core import QgsProcessingException
 
 def wrap360(deg: float) -> float:
     deg = deg % 360.0
-    return deg if deg >= 0 else deg + 360.0
+    return deg
 
 
 def deg2rad(deg: float) -> float:
@@ -20,46 +20,50 @@ def rad2deg(rad: float) -> float:
 
 
 def trend_plunge_to_xyz(trend_deg: float, plunge_deg: float) -> np.ndarray:
-    tr = deg2rad(trend_deg)
-    pl = deg2rad(plunge_deg)
-    x = math.sin(tr) * math.cos(pl)  # East
-    y = math.cos(tr) * math.cos(pl)  # North
-    z = -math.sin(pl)  # Up (negative is down-plunge)
+    trend_rad = deg2rad(trend_deg)
+    plunge_rad = deg2rad(plunge_deg)
+    x = np.cos(plunge_rad) * np.cos(trend_rad)  # East
+    y = np.cos(plunge_rad) * np.sin(trend_rad)  # North
+    z = -np.sin(plunge_rad)  # Up (negative is down-plunge)
     v = np.array([x, y, z], dtype=float)
-    n = np.linalg.norm(v)
-    return v / n if n else v
+    return v
 
 
 def xyz_to_trend_plunge(v: np.ndarray) -> tuple[float, float]:
     x, y, z = float(v[0]), float(v[1]), float(v[2])
-    plunge = math.asin(max(-1.0, min(1.0, -z)))
-    trend = math.atan2(x, y)
-    return wrap360(rad2deg(trend)), rad2deg(plunge)
+    plunge_rad = np.arcsin(-z)
+    trend_rad = np.arctan2(x, y)
+    plunge_deg = wrap360(rad2deg(plunge_rad))
+    trend_deg = wrap360(rad2deg(trend_rad))
+    return trend_deg, plunge_deg
 
 
 def dipdir_dip_to_pole_xyz(dipdir_deg: float, dip_deg: float) -> np.ndarray:
-    pole_trend = dipdir_deg
-    pole_plunge = 90.0 - dip_deg
-    return trend_plunge_to_xyz(pole_trend, pole_plunge)
+    pole_trend_deg = wrap360(dipdir_deg + 180)
+    pole_plunge_deg = 90.0 - dip_deg
+    return trend_plunge_to_xyz(pole_trend_deg, pole_plunge_deg)
 
 
 def dipdir2strike(dipdir_deg: float) -> float:
-    return wrap360(dipdir_deg - 90.0)
+    strike_deg = wrap360(dipdir_deg - 90.0)
+    return strike_deg
 
 
 def strike2dipdir(strike_deg: float) -> float:
-    return wrap360(strike_deg + 90.0)
+    dipdir_deg = wrap360(strike_deg + 90.0)
+    return dipdir_deg
 
 
-def mirror_to_upper_hemisphere(v: np.ndarray) -> np.ndarray:
-    return -v if v[2] < 0 else v
+def mirror_to_other_hemisphere(v: np.ndarray) -> np.ndarray:
+    return -v
 
 
 def vmf_mean_axial(vectors_xyz: np.ndarray) -> dict:
+    # _________________________________________________________________
     if vectors_xyz.shape[0] == 0:
         raise QgsProcessingException("No vectors for VMF.")
 
-    V = np.array([mirror_to_upper_hemisphere(v) for v in vectors_xyz], dtype=float)
+    V = np.array([mirror_to_other_hemisphere(v) for v in vectors_xyz], dtype=float)
     S = V.sum(axis=0)
     S_norm = float(np.linalg.norm(S))
     if S_norm == 0.0:
@@ -79,10 +83,11 @@ def vmf_mean_axial(vectors_xyz: np.ndarray) -> dict:
 
 
 def bingham_principal_axes_axial(vectors_xyz: np.ndarray) -> dict:
+    # _________________________________________________________________
     if vectors_xyz.shape[0] == 0:
         raise QgsProcessingException("No vectors for Bingham summary.")
 
-    V = np.array([mirror_to_upper_hemisphere(v) for v in vectors_xyz], dtype=float)
+    V = np.array([mirror_to_other_hemisphere(v) for v in vectors_xyz], dtype=float)
     V = V / np.linalg.norm(V, axis=1, keepdims=True)
 
     T = (V.T @ V) / V.shape[0]
@@ -93,13 +98,15 @@ def bingham_principal_axes_axial(vectors_xyz: np.ndarray) -> dict:
 
     beta = evecs[:, 0]
     beta = beta / np.linalg.norm(beta)
-    beta = mirror_to_upper_hemisphere(beta)
+    beta = mirror_to_other_hemisphere(beta)
     return {"axes_xyz": evecs, "evals": evals, "beta_axis_xyz": beta}
 
 
 def axial_angular_distance(u: np.ndarray, v: np.ndarray) -> float:
-    dot = float(np.clip(abs(np.dot(u, v)), -1.0, 1.0))
-    return math.acos(dot)
+    dot = abs(np.dot(u, v))
+    angle_rad = np.arccos(dot)
+    angle_deg = rad2deg(angle_rad)
+    return angle_deg
 
 
 def kmedoids_pam_axial(
@@ -108,6 +115,7 @@ def kmedoids_pam_axial(
     maxiter: int = 100,
     init_medoids: np.ndarray | None = None,
 ):
+    # _________________________________________________________________
     n = vectors_xyz.shape[0]
     if n == 0:
         raise QgsProcessingException("No vectors to cluster.")
@@ -180,6 +188,7 @@ def read_orientations_from_layer_selection(
     vectors = []
     strikes = []
     dips = []
+    dipdirs = []
     trends = []
     plunges = []
 
@@ -194,30 +203,29 @@ def read_orientations_from_layer_selection(
             v2 = float(v2)
         except Exception:
             continue
+        if not (0.0 <= v1 <= 90.0):
+            continue
+        if not (0.0 <= v2 <= 360.0):
+            continue
 
         if is_planes:
             dip = v1
-            dipdir = wrap360(v2)
-            if not (0.0 <= dip <= 90.0):
-                continue
+            dipdir = v2
+            pole_trend = wrap360(dipdir + 180)
+            pole_plunge = 90.0 - dip
+            pole_xyz = dipdir_dip_to_pole_xyz(dipdir, dip)
 
-            pole = dipdir_dip_to_pole_xyz(dipdir, dip)
-            vectors.append(pole)
-
+            vectors.append(pole_xyz)
             dips.append(dip)
+            dipdirs.append(dipdir)
             strikes.append(dipdir2strike(dipdir))
-
-            tr, pl = xyz_to_trend_plunge(pole)
-            trends.append(tr)
-            plunges.append(pl)
+            trends.append(pole_trend)
+            plunges.append(pole_plunge)
         else:
             plunge = v1
-            trend = wrap360(v2)
-            if not (0.0 <= plunge <= 90.0):
-                continue
-
-            line = trend_plunge_to_xyz(trend, plunge)
-            vectors.append(line)
+            trend = v2
+            line_xyz = trend_plunge_to_xyz(trend, plunge)
+            vectors.append(line_xyz)
             trends.append(trend)
             plunges.append(plunge)
 

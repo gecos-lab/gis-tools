@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# stereo_gis @ Andrea Bistacchi 2024-06-26
+# qAttitude @ Andrea Bistacchi 2024-06-26
 
 from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtGui import QIcon
@@ -14,13 +14,13 @@ class StereoGisPlugin:
         self.dlg = None
 
     def initGui(self):
-        self.action = QAction(QIcon(), "Stereo GIS", self.iface.mainWindow())
+        self.action = QAction(QIcon(), "qAttitude", self.iface.mainWindow())
         self.action.triggered.connect(self.run)
-        self.iface.addPluginToMenu("Stereo GIS", self.action)
+        self.iface.addPluginToMenu("qAttitude", self.action)
 
     def unload(self):
         if self.action:
-            self.iface.removePluginMenu("Stereo GIS", self.action)
+            self.iface.removePluginMenu("qAttitude", self.action)
             self.action = None
 
     def run(self):
