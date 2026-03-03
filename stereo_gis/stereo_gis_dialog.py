@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# stereo_gis @ Andrea Bistacchi 2024-06-26
+
 import os
 import sys
 import traceback
@@ -11,9 +13,22 @@ if os.path.isdir(LIB) and LIB not in sys.path:
 import numpy as np
 
 from qgis.PyQt.QtWidgets import (
-    QDialog, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel, QComboBox, QCheckBox,
-    QPushButton, QSpinBox, QLineEdit, QFileDialog, QGroupBox,
-    QRadioButton, QTableView, QAbstractItemView, QMessageBox
+    QDialog,
+    QHBoxLayout,
+    QVBoxLayout,
+    QGridLayout,
+    QLabel,
+    QComboBox,
+    QCheckBox,
+    QPushButton,
+    QSpinBox,
+    QLineEdit,
+    QFileDialog,
+    QGroupBox,
+    QRadioButton,
+    QTableView,
+    QAbstractItemView,
+    QMessageBox,
 )
 from qgis.PyQt.QtGui import QStandardItemModel, QStandardItem
 
@@ -22,6 +37,7 @@ from qgis.core import QgsProject, QgsVectorLayer, QgsMimeDataUtils, QgsMapLayer
 from qgis.PyQt.QtCore import pyqtSignal, Qt
 
 import matplotlib
+
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -35,7 +51,8 @@ from .stereo_gis_analysis import (
     bingham_principal_axes_axial,
     kmedoids_pam_axial,
     xyz_to_trend_plunge,
-    wrap360, dipdir2strike,
+    wrap360,
+    dipdir2strike,
 )
 
 
@@ -96,7 +113,9 @@ class CopyableTableView(QTableView):
         selection = sorted(selection, key=lambda x: (x.row(), x.column()))
         rows = {}
         for idx in selection:
-            rows.setdefault(idx.row(), {})[idx.column()] = idx.data() if idx.data() is not None else ""
+            rows.setdefault(idx.row(), {})[idx.column()] = (
+                idx.data() if idx.data() is not None else ""
+            )
         lines = []
         for r in sorted(rows.keys()):
             cols = rows[r]
@@ -105,6 +124,7 @@ class CopyableTableView(QTableView):
             lines.append(line)
         tsv = "\n".join(lines)
         from qgis.PyQt.QtWidgets import QApplication
+
         QApplication.clipboard().setText(tsv)
 
 
@@ -352,7 +372,7 @@ class StereoGisDialog(QDialog):
             self.field2_combo.addItem(f.name())
 
     def _refresh_field_controls(self):
-        is_planes = (self.data_combo.currentIndex() == 0)
+        is_planes = self.data_combo.currentIndex() == 0
         if is_planes:
             self.field1_label.setText("Dip field:")
             self.field2_label.setText("DipDir field:")
@@ -369,10 +389,14 @@ class StereoGisDialog(QDialog):
 
     def _toggle_picking(self):
         if not self.init_pick.isChecked():
-            QMessageBox.information(self, "Pick medoids", "Select 'Pick medoids on plot' first.")
+            QMessageBox.information(
+                self, "Pick medoids", "Select 'Pick medoids on plot' first."
+            )
             return
         self._picking_enabled = not self._picking_enabled
-        self.btn_pick.setText("Picking: ON" if self._picking_enabled else "Pick medoids")
+        self.btn_pick.setText(
+            "Picking: ON" if self._picking_enabled else "Pick medoids"
+        )
 
     def _clear_picks(self):
         self._picked_medoid_indices = []
@@ -384,7 +408,11 @@ class StereoGisDialog(QDialog):
         if event.inaxes != self.ax:
             return
         if self._last_projected is None:
-            QMessageBox.information(self, "Pick medoids", "Run analysis first (to compute point projection), then pick medoids.")
+            QMessageBox.information(
+                self,
+                "Pick medoids",
+                "Run analysis first (to compute point projection), then pick medoids.",
+            )
             return
 
         k = int(self.k_spin.value())
@@ -420,17 +448,23 @@ class StereoGisDialog(QDialog):
             QMessageBox.critical(self, "Stereo GIS", "No vector layer selected.")
             return
 
-        is_planes = (self.data_combo.currentIndex() == 0)
+        is_planes = self.data_combo.currentIndex() == 0
         field1 = self.field1_combo.currentText()
         field2 = self.field2_combo.currentText()
 
         try:
-            data = read_orientations_from_layer_selection(layer, is_planes, field1, field2)
+            data = read_orientations_from_layer_selection(
+                layer, is_planes, field1, field2
+            )
 
             vectors_xyz = data["vectors_xyz"]
             n = int(vectors_xyz.shape[0])
             if n == 0:
-                QMessageBox.warning(self, "Stereo GIS", "No valid orientation values in the layer/selection.")
+                QMessageBox.warning(
+                    self,
+                    "Stereo GIS",
+                    "No valid orientation values in the layer/selection.",
+                )
                 self._plot_empty()
                 return
 
@@ -456,17 +490,29 @@ class StereoGisDialog(QDialog):
                 else:
                     self.ax.line(plunges, trends, "k.", markersize=4, alpha=0.85)
 
-            if show_individual and plot_gcs and data.get("strikes_deg") is not None and data.get("dips_deg") is not None:
-                self.ax.plane(data["strikes_deg"], data["dips_deg"], color="0.4", linewidth=0.7, alpha=0.6)
+            if (
+                show_individual
+                and plot_gcs
+                and data.get("strikes_deg") is not None
+                and data.get("dips_deg") is not None
+            ):
+                self.ax.plane(
+                    data["strikes_deg"],
+                    data["dips_deg"],
+                    color="0.4",
+                    linewidth=0.7,
+                    alpha=0.6,
+                )
 
             if show_contours:
                 try:
                     self.ax.density_contourf(
-                        plunges, trends,
+                        plunges,
+                        trends,
                         measurement="lines",
                         cmap="Greys",
                         alpha=0.6,
-                        levels=int(self.contour_levels.value())
+                        levels=int(self.contour_levels.value()),
                     )
                 except TypeError:
                     self.ax.density_contourf(plunges, trends, cmap="Greys", alpha=0.6)
@@ -495,14 +541,19 @@ class StereoGisDialog(QDialog):
             if self.chk_kmedoids.isChecked():
                 k = int(self.k_spin.value())
                 if k > n:
-                    QMessageBox.warning(self, "Stereo GIS", f"k={k} cannot exceed number of observations n={n}.")
+                    QMessageBox.warning(
+                        self,
+                        "Stereo GIS",
+                        f"k={k} cannot exceed number of observations n={n}.",
+                    )
                     return
 
                 if self.init_pick.isChecked():
                     if len(self._picked_medoid_indices) != k:
                         QMessageBox.warning(
-                            self, "Stereo GIS",
-                            f"Pick exactly k={k} medoids on plot (picked {len(self._picked_medoid_indices)})."
+                            self,
+                            "Stereo GIS",
+                            f"Pick exactly k={k} medoids on plot (picked {len(self._picked_medoid_indices)}).",
                         )
                         return
                     init_medoids = np.array(self._picked_medoid_indices, dtype=int)
@@ -510,7 +561,9 @@ class StereoGisDialog(QDialog):
                     rng = np.random.default_rng(int(self.seed_spin.value()))
                     init_medoids = rng.choice(n, size=k, replace=False)
 
-                labels, medoids = kmedoids_pam_axial(vectors_xyz, k=k, maxiter=100, init_medoids=init_medoids)
+                labels, medoids = kmedoids_pam_axial(
+                    vectors_xyz, k=k, maxiter=100, init_medoids=init_medoids
+                )
 
                 if self.chk_plot_clusters.isChecked():
                     cmap = plt.get_cmap("tab10")
@@ -520,19 +573,58 @@ class StereoGisDialog(QDialog):
 
                         if plot_poles:
                             if is_planes:
-                                self.ax.pole(trends[idx], plunges[idx], ".", color=color, markersize=6, alpha=0.9)
+                                self.ax.pole(
+                                    trends[idx],
+                                    plunges[idx],
+                                    ".",
+                                    color=color,
+                                    markersize=6,
+                                    alpha=0.9,
+                                )
                             else:
-                                self.ax.line(plunges[idx], trends[idx], ".", color=color, markersize=6, alpha=0.9)
+                                self.ax.line(
+                                    plunges[idx],
+                                    trends[idx],
+                                    ".",
+                                    color=color,
+                                    markersize=6,
+                                    alpha=0.9,
+                                )
 
-                        if is_planes and plot_gcs and data.get("strikes_deg") is not None and data.get("dips_deg") is not None:
-                            self.ax.plane(data["strikes_deg"][idx], data["dips_deg"][idx], color=color, linewidth=1.0, alpha=0.45)
+                        if (
+                            is_planes
+                            and plot_gcs
+                            and data.get("strikes_deg") is not None
+                            and data.get("dips_deg") is not None
+                        ):
+                            self.ax.plane(
+                                data["strikes_deg"][idx],
+                                data["dips_deg"][idx],
+                                color=color,
+                                linewidth=1.0,
+                                alpha=0.45,
+                            )
 
                     for ci, mi in enumerate(medoids):
                         color = cmap(ci % 10)
                         if is_planes:
-                            self.ax.pole([trends[mi]], [plunges[mi]], marker="*", color=color, markersize=14, markeredgecolor="k")
+                            self.ax.pole(
+                                [trends[mi]],
+                                [plunges[mi]],
+                                marker="*",
+                                color=color,
+                                markersize=14,
+                                markeredgecolor="k",
+                            )
                         else:
-                            self.ax.line([plunges[mi]], [trends[mi]], marker="*", color=color, markersize=14, markeredgecolor="k")
+                            self.ax.line(
+                                [plunges[mi]],
+                                [trends[mi]],
+                                marker="*",
+                                color=color,
+                                markersize=14,
+                                markeredgecolor="k",
+                            )
 
                 for ci in range(k):
                     idx = np.where(labels == ci)[0]
@@ -540,8 +632,22 @@ class StereoGisDialog(QDialog):
                         continue
                     vmf_c = vmf_mean_axial(vectors_xyz[idx])
                     mean_xyz = vmf_c["mean_xyz"]
-                    m_tr, m_pl = xyz_to_trend_plunge(mean_xyz) if np.isfinite(mean_xyz).all() else (float("nan"), float("nan"))
-                    cluster_summary.append((ci, int(idx.size), int(medoids[ci]), f"{m_tr:.2f}", f"{m_pl:.2f}", f"{vmf_c['Rbar']:.3f}", f"{vmf_c['kappa']:.3g}"))
+                    m_tr, m_pl = (
+                        xyz_to_trend_plunge(mean_xyz)
+                        if np.isfinite(mean_xyz).all()
+                        else (float("nan"), float("nan"))
+                    )
+                    cluster_summary.append(
+                        (
+                            ci,
+                            int(idx.size),
+                            int(medoids[ci]),
+                            f"{m_tr:.2f}",
+                            f"{m_pl:.2f}",
+                            f"{vmf_c['Rbar']:.3f}",
+                            f"{vmf_c['kappa']:.3g}",
+                        )
+                    )
 
             self.ax.set_title(f"{'Planes' if is_planes else 'Lines'} (n={n})")
             self.canvas.draw()
@@ -549,6 +655,7 @@ class StereoGisDialog(QDialog):
             # cache projected XY for picking (optional)
             try:
                 from mplstereonet import stereonet_math
+
                 x, y = stereonet_math.line(plunges, trends)
                 self._last_projected = np.column_stack([x, y]).astype(float)
             except Exception:
@@ -558,25 +665,43 @@ class StereoGisDialog(QDialog):
 
             self._set_table(
                 self.cluster_table,
-                headers=["Cluster", "n", "Medoid index", "VMF mean trend", "VMF mean plunge", "R̄", "κ≈"],
-                rows=cluster_summary
+                headers=[
+                    "Cluster",
+                    "n",
+                    "Medoid index",
+                    "VMF mean trend",
+                    "VMF mean plunge",
+                    "R̄",
+                    "κ≈",
+                ],
+                rows=cluster_summary,
             )
 
             self._set_table(
                 self.tests_table,
                 headers=["Test", "H0", "Statistic", "p-value", "Decision"],
-                rows=[("Not implemented yet", "", "", "", "")]
+                rows=[("Not implemented yet", "", "", "", "")],
             )
 
             # save only on request
             if self.chk_save.isChecked():
                 out_dir = self.out_dir.text().strip()
                 if not out_dir or not os.path.isdir(out_dir):
-                    QMessageBox.warning(self, "Stereo GIS", "Save enabled, but output directory is invalid.")
+                    QMessageBox.warning(
+                        self,
+                        "Stereo GIS",
+                        "Save enabled, but output directory is invalid.",
+                    )
                     return
                 if self.chk_save_png.isChecked():
-                    self.fig.savefig(os.path.join(out_dir, "stereonet.png"), dpi=200, bbox_inches="tight")
+                    self.fig.savefig(
+                        os.path.join(out_dir, "stereonet.png"),
+                        dpi=200,
+                        bbox_inches="tight",
+                    )
 
         except Exception as e:
             tb = traceback.format_exc()
-            QMessageBox.critical(self, "Stereo GIS", f"Error: {type(e).__name__}: {e}\n\n{tb}")
+            QMessageBox.critical(
+                self, "Stereo GIS", f"Error: {type(e).__name__}: {e}\n\n{tb}"
+            )

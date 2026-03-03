@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# stereo_gis @ Andrea Bistacchi 2024-06-26
+
 from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtGui import QIcon
 

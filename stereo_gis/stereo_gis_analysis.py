@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# stereo_gis @ Andrea Bistacchi 2024-06-26
+
 import math
 import numpy as np
 from qgis.core import QgsProcessingException
@@ -20,9 +22,9 @@ def rad2deg(rad: float) -> float:
 def trend_plunge_to_xyz(trend_deg: float, plunge_deg: float) -> np.ndarray:
     tr = deg2rad(trend_deg)
     pl = deg2rad(plunge_deg)
-    x = math.sin(tr) * math.cos(pl)   # East
-    y = math.cos(tr) * math.cos(pl)   # North
-    z = -math.sin(pl)                 # Up (negative is down-plunge)
+    x = math.sin(tr) * math.cos(pl)  # East
+    y = math.cos(tr) * math.cos(pl)  # North
+    z = -math.sin(pl)  # Up (negative is down-plunge)
     v = np.array([x, y, z], dtype=float)
     n = np.linalg.norm(v)
     return v / n if n else v
@@ -40,11 +42,14 @@ def dipdir_dip_to_pole_xyz(dipdir_deg: float, dip_deg: float) -> np.ndarray:
     pole_plunge = 90.0 - dip_deg
     return trend_plunge_to_xyz(pole_trend, pole_plunge)
 
+
 def dipdir2strike(dipdir_deg: float) -> float:
     return wrap360(dipdir_deg - 90.0)
 
+
 def strike2dipdir(strike_deg: float) -> float:
     return wrap360(strike_deg + 90.0)
+
 
 def mirror_to_upper_hemisphere(v: np.ndarray) -> np.ndarray:
     return -v if v[2] < 0 else v
@@ -58,7 +63,11 @@ def vmf_mean_axial(vectors_xyz: np.ndarray) -> dict:
     S = V.sum(axis=0)
     S_norm = float(np.linalg.norm(S))
     if S_norm == 0.0:
-        return {"mean_xyz": np.array([np.nan, np.nan, np.nan]), "Rbar": 0.0, "kappa": float("nan")}
+        return {
+            "mean_xyz": np.array([np.nan, np.nan, np.nan]),
+            "Rbar": 0.0,
+            "kappa": float("nan"),
+        }
 
     mean_xyz = S / S_norm
     n = V.shape[0]
@@ -77,8 +86,8 @@ def bingham_principal_axes_axial(vectors_xyz: np.ndarray) -> dict:
     V = V / np.linalg.norm(V, axis=1, keepdims=True)
 
     T = (V.T @ V) / V.shape[0]
-    evals, evecs = np.linalg.eigh(T)          # ascending
-    idx = np.argsort(evals)[::-1]             # descending
+    evals, evecs = np.linalg.eigh(T)  # ascending
+    idx = np.argsort(evals)[::-1]  # descending
     evals = evals[idx]
     evecs = evecs[:, idx]
 
@@ -97,7 +106,7 @@ def kmedoids_pam_axial(
     vectors_xyz: np.ndarray,
     k: int,
     maxiter: int = 100,
-    init_medoids: np.ndarray | None = None
+    init_medoids: np.ndarray | None = None,
 ):
     n = vectors_xyz.shape[0]
     if n == 0:
@@ -147,7 +156,9 @@ def kmedoids_pam_axial(
     return labels, medoids
 
 
-def read_orientations_from_layer_selection(layer, is_planes: bool, field1: str, field2: str) -> dict:
+def read_orientations_from_layer_selection(
+    layer, is_planes: bool, field1: str, field2: str
+) -> dict:
     """
     Reads orientations from the layer.
     Uses selected features if any are selected; otherwise uses all features.
@@ -160,7 +171,11 @@ def read_orientations_from_layer_selection(layer, is_planes: bool, field1: str, 
     if idx1 < 0 or idx2 < 0:
         raise QgsProcessingException("Selected field not found in layer.")
 
-    feats = layer.getSelectedFeatures() if layer.selectedFeatureCount() else layer.getFeatures()
+    feats = (
+        layer.getSelectedFeatures()
+        if layer.selectedFeatureCount()
+        else layer.getFeatures()
+    )
 
     vectors = []
     strikes = []
