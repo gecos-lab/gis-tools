@@ -1,5 +1,3 @@
 numpy
 matplotlib
 mplstereonet
-sphstat
-sklearn_extra

@@ -233,6 +233,7 @@ def read_orientations_from_layer_selection(
     return {
         "vectors_xyz": vectors_xyz,
         "strikes_deg": np.asarray(strikes, dtype=float) if strikes else None,
+        "dipdirs_deg": np.asarray(dipdirs, dtype=float) if dipdirs else None,
         "dips_deg": np.asarray(dips, dtype=float) if dips else None,
         "trends_deg": np.asarray(trends, dtype=float),
         "plunges_deg": np.asarray(plunges, dtype=float),

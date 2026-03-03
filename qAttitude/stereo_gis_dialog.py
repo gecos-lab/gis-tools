@@ -29,6 +29,7 @@ from qgis.PyQt.QtWidgets import (
     QTableView,
     QAbstractItemView,
     QMessageBox,
+    QApplication,
 )
 from qgis.PyQt.QtGui import QStandardItemModel, QStandardItem
 
@@ -123,7 +124,6 @@ class CopyableTableView(QTableView):
             line = "\t".join(str(cols.get(c, "")) for c in range(maxc + 1))
             lines.append(line)
         tsv = "\n".join(lines)
-        from qgis.PyQt.QtWidgets import QApplication
 
         QApplication.clipboard().setText(tsv)
 
@@ -145,6 +145,9 @@ class StereoGisDialog(QDialog):
         self._last_projected = None
 
         self._init_ui()
+
+        # Initialize the plot area immediately (empty stereonet)
+        self._plot_empty("Drop/select a vector layer to begin")
 
     def _init_ui(self):
         main = QHBoxLayout(self)
@@ -437,6 +440,21 @@ class StereoGisDialog(QDialog):
             model.appendRow(items)
         table_view.setModel(model)
         table_view.resizeColumnsToContents()
+
+    def _plot_empty(self, title: str = "No data to plot") -> None:
+        """
+        Clears the plot and shows an empty stereonet.
+        Safe to call any time (e.g., when no valid features/values exist).
+        """
+        try:
+            self.fig.clear()
+            self.ax = self.fig.add_subplot(111, projection="stereonet")
+            self.ax.grid(True)
+            self.ax.set_title(title)
+            self.canvas.draw()
+        except Exception:
+            # As a last resort, avoid crashing the plugin due to plotting issues
+            pass
 
     def _run_analysis(self):
         layer = self._current_layer()
