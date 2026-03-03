@@ -17,7 +17,9 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtGui import QStandardItemModel, QStandardItem
 
-from qgis.core import QgsProject, QgsVectorLayer
+from qgis.core import QgsProject, QgsVectorLayer, QgsMimeDataUtils, QgsMapLayer
+
+from qgis.PyQt.QtCore import pyqtSignal, Qt
 
 import matplotlib
 matplotlib.use("QtAgg")
@@ -35,6 +37,49 @@ from .stereo_gis_analysis import (
     xyz_to_trend_plunge,
     wrap360, dipdir2strike,
 )
+
+
+class LayerDropGroupBox(QGroupBox):
+    layerDropped = pyqtSignal(QgsMapLayer)
+
+    def __init__(self, title: str = "", parent=None):
+        super().__init__(title, parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if QgsMimeDataUtils.isUriList(event.mimeData()):
+            event.setDropAction(Qt.CopyAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if QgsMimeDataUtils.isUriList(event.mimeData()):
+            event.setDropAction(Qt.CopyAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if not QgsMimeDataUtils.isUriList(event.mimeData()):
+            event.ignore()
+            return
+
+        uris = QgsMimeDataUtils.decodeUriList(event.mimeData())
+        for uri in uris:
+            layer_id_attr = getattr(uri, "layerId", None)
+            layer_id = layer_id_attr() if callable(layer_id_attr) else layer_id_attr
+            if not layer_id:
+                continue
+
+            layer = QgsProject.instance().mapLayer(layer_id)
+            if layer is not None:
+                self.layerDropped.emit(layer)
+                event.setDropAction(Qt.CopyAction)
+                event.accept()
+                return
+
+        event.ignore()
 
 
 class CopyableTableView(QTableView):
@@ -67,6 +112,10 @@ class StereoGisDialog(QDialog):
     def __init__(self, iface):
         super().__init__(iface.mainWindow())
         self.iface = iface
+
+        self.analysis_layer = None
+        self._layer_ids_by_index = []  # keeps combo index -> layer.id()
+
         self.setWindowTitle("Stereo GIS")
         self.resize(1100, 750)
 
@@ -76,7 +125,6 @@ class StereoGisDialog(QDialog):
         self._last_projected = None
 
         self._init_ui()
-        self._populate_layers()
 
     def _init_ui(self):
         main = QHBoxLayout(self)
@@ -87,7 +135,8 @@ class StereoGisDialog(QDialog):
         main.addLayout(right, 1)
 
         # Inputs
-        g_in = QGroupBox("Inputs (selected features only)")
+        g_in = LayerDropGroupBox("Input layer (selected only)", self)
+        g_in.layerDropped.connect(self.set_analysis_layer)
         left.addWidget(g_in)
         grid = QGridLayout(g_in)
 
@@ -239,19 +288,58 @@ class StereoGisDialog(QDialog):
         right.addWidget(self.tests_table, 1)
 
         self._refresh_field_controls()
+        self._populate_layers()
 
     def _populate_layers(self):
         self.layer_combo.clear()
-        layers = [l for l in QgsProject.instance().mapLayers().values() if isinstance(l, QgsVectorLayer)]
-        for lyr in layers:
-            self.layer_combo.addItem(lyr.name(), lyr.id())
-        self._refresh_fields()
+        self._layer_ids_by_index = []
+        for layer in QgsProject.instance().mapLayers().values():
+            # Optional: filter only vector layers, etc.
+            # if layer.type() != QgsMapLayer.VectorLayer:
+            #     continue
 
-    def _current_layer(self):
-        layer_id = self.layer_combo.currentData()
-        if not layer_id:
-            return None
-        return QgsProject.instance().mapLayer(layer_id)
+            self.layer_combo.addItem(layer.name())
+            self._layer_ids_by_index.append(layer.id())
+
+            # If we already have an analysis_layer, keep UI in sync
+        if self.analysis_layer is not None:
+            self._select_layer_in_combo(self.analysis_layer)
+
+    def _select_layer_in_combo(self, layer: QgsMapLayer) -> None:
+        """
+        Selects the given layer in the combo if present.
+        """
+        try:
+            idx = self._layer_ids_by_index.index(layer.id())
+        except ValueError:
+            return
+        self.layer_combo.setCurrentIndex(idx)
+
+    def set_analysis_layer(self, layer: QgsMapLayer):
+        """
+        Called when a layer is dropped onto the Input group box.
+        Make drag&drop update the same selection used by _current_layer().
+        """
+        self.analysis_layer = layer
+        self._select_layer_in_combo(layer)
+
+    def _current_layer(self) -> QgsMapLayer | None:
+        """
+        Return the currently selected layer.
+        Primary source: the UI selector (combo).
+        Secondary source: self.analysis_layer (if combo not available).
+        """
+        # --- preferred: resolve from combo selection ---
+        if hasattr(self, "cbo_layer") and self.layer_combo.currentIndex() >= 0:
+            idx = self.layer_combo.currentIndex()
+            if 0 <= idx < len(self._layer_ids_by_index):
+                layer_id = self._layer_ids_by_index[idx]
+                lyr = QgsProject.instance().mapLayer(layer_id)
+                if lyr is not None:
+                    return lyr
+
+        # --- fallback ---
+        return self.analysis_layer
 
     def _refresh_fields(self):
         layer = self._current_layer()
