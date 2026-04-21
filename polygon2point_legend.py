@@ -168,7 +168,7 @@ class PolygonLegendToPointLegend(QgsProcessingAlgorithm):
             if not field_name:
                 raise QgsProcessingException(
                     "Could not determine the categorized field (and no target field selected).")
-
+            
             categories = []
             for cat in poly_renderer.categories():
                 fill = cat.symbol().color()
